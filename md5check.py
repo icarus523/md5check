@@ -4,13 +4,20 @@ import os
 import zipfile
 import getopt
 import getpass
-from tkinter import filedialog
+import logging
+
 from collections import namedtuple
 from datetime import datetime
 from threading import Thread
 
+from tkinter import *
+from tkinter import ttk
+from tkinter import filedialog
+from tkinter import messagebox
+
 MAXIMUM_BLOCKSIZE_TO_READ = 65535
 p_reset = "\x08"*8
+VERSION="1.1 (GUI version)" # GUI version
 
 class md5check:
 
@@ -99,9 +106,9 @@ class md5check:
             else:
                 return False
 
-    def processfile(self):
-        #NUMBER_OF_BYTES_TO_READ = 128
-        h = self.do_md5(self.filepath_zip, MAXIMUM_BLOCKSIZE_TO_READ)
+    def processfile(self, filepath_zip):
+        #h = self.do_md5(self.filepath_zip, MAXIMUM_BLOCKSIZE_TO_READ)
+        h = self.do_md5(filepath_zip, MAXIMUM_BLOCKSIZE_TO_READ)
         matches = self.compareresult(h)
 
         if (matches):
@@ -114,7 +121,7 @@ class md5check:
         if (self.unzipflag == True):
             print("Unzipping file...Please Wait.")
             #Thread(target=self.unzip(self.filepath_zip, self.currentdir)).start()
-            self.unzip(self.filepath_zip, self.currentdir)
+            self.unzip(filepath_zip, self.currentdir)
         # Add SHA1 hash calc over the generated file     
         if (self.signfile == True):
             print("Signing file..." + self.signfilename)
@@ -146,25 +153,37 @@ class md5check:
                 print("%6.2f %%\r" % (float(percentage)))
                 zf.extract(file, dest_dir)
     
-    def handlearguments(self):       
-        if (os.path.isfile(self.filepath_zip)):
-            if (self.runverify == False):
-                self.filename_zip =  os.path.basename(self.filepath_zip)
-                self.filename_md5 = self.filename_zip.rstrip("zip") + "md5"
-                self.currentdir = os.path.dirname(self.filepath_zip)
-                print("Processing: " + self.filename_zip +
-                       " and " + self.filename_md5)
-                self.signfilename = self.filename_zip[:-4] + '_signed_output.sigs'
-                # Start Thread for ProcessFile()
-                Thread(target=self.processfile()).start()
+    def handlearguments(self):
+        Submission = {}
+        self.SubmissionList = list()
+        for item in self.filepath_zip:
+            logging.debug("Item is: " + item + ". Filepath_zip is: " + self.filepath_zip)
+            if (os.path.isfile(str(item))):
+                if (self.runverify == False):
+                    self.filename_zip =  os.path.basename(item)
+                    submission = {
+                        'filename_zip' : os.path.basename(item),
+                        'filename_md5' : os.path.basename(item).rstrip("zip") + "md5",
+                        'currentdir' : os.path.dirname(self.filepath_zip)
+                    }
+                    self.SubmissionList.append(submission)
+                    #self.filename_md5 = self.filename_zip.rstrip("zip") + "md5"
+                    #self.currentdir = os.path.dirname(self.filepath_zip)
+                    #print("Processing: " + self.filename_zip +
+                    #       " and " + self.filename_md5)
+                    logging.info("Processing: " + submission[filename_zip] +
+                           " and " + submission[filename_md5])
+                    self.signfilename = self.filename_zip[:-4] + '_signed_output.sigs'
+                    # Start Thread for ProcessFile()
+                    Thread(target=self.processfile(item)).start()
+                else:
+                    self.currentdir = os.path.dirname(item)
+                    # Start Thread for Verify File()
+                    Thread(target=self.verifyfile(item)).start()
             else:
-                self.currentdir = os.path.dirname(self.filepath_zip)
-                # Start Thread for Verify File()
-                Thread(target=self.verifyfile(self.filepath_zip)).start()
-        else:
-            print("Expecting to read file: <" + self.filepath_zip + "> " + 
-                "Please confirm input parameters.")
-            sys.exit(2)
+                logging.error("Expecting to read file: <" + item + "> " + 
+                    "Please confirm input parameters.")
+                sys.exit(2)
 
     def stripfile(self, fname, outfile="tmp.txt"):
         
@@ -196,13 +215,16 @@ class md5check:
             else: 
                 print("Processing: " + self.filename_zip + " and " + self.filename_md5)
 
-        self.signfilename = self.filename_zip[:-4] + '_signed_output.sigs'
+        for item in self.filename_zip: # handle multiple inputs
+            #self.signfilename = self.filename_zip[:-4] + '_signed_output.sigs'
+            self.signfilename = item[:-4] + '_signed_output.sigs'
 
-        if (self.runverify == True):
+            if (self.runverify == True):
             #Thread(target=self.verify(self.filepath_zip)).start()
-            self.verify(self.filepath_zip)
-        else:
-            Thread(target=self.processfile()).start()
+                #self.verify(self.filepath_zip)
+                self.verify(self.filepath_zip)
+            else:
+                Thread(target=self.processfile(item)).start()
 
     def __init__(self):
         self.filename_zip = ''
@@ -212,40 +234,121 @@ class md5check:
         self.rungui = False
         self.unzipflag = False
         self.runverify = False
+        logging.basicConfig(level=logging.DEBUG, format=' %(asctime)s - %(levelname)s- %(message)s')
+        logging.debug('Start of md5check')
+
+        self.root = Tk()
+        self.setupGUI()
+
+##        try:
+##            opts, args = getopt.getopt(sys.argv[1:], "v:i:zgsh",["verify=","input=","unzip","gui","sign_out"])
+##            
+##            for opt, arg in opts:
+##                if opt == '-h':
+##                    print('Usage: md5check.py --unzip --gui --sign_out --input <input filename> --verify <input filename>')
+##                    print('    where: --unzip or -z      will attempt to unzip input file')
+##                    print('           --gui or -g        will display a File Chooser window to select the file')
+##                    print('           --sign_out or -s   generates a SHA1 hash file output')
+##                    print('           --input or -i      the ZIP file to be processed')
+##                    print('           --verify or -v     will attempt to verify the sigs file')
+##                    sys.exit()
+##                elif opt in ("-i", "--input"):
+##                    self.filepath_zip = arg
+##                elif opt in ("-z", "--unzip"):
+##                    self.unzipflag = True
+##                elif opt in ("-g", "--gui"):
+##                    self.rungui = True
+##                elif opt in ("-s", "--sign_out"):
+##                    self.signfile = True
+##                elif opt in ("-v", "--verify"):
+##                    self.filepath_zip = arg
+##                    self.runverify = True
+##
+##            if self.rungui == True:
+##                Thread(target=self.askforfile()).start()
+##            else:
+##                self.handlearguments()
+##
+##        except getopt.GetoptError:
+##            print('try: md5check.py -h for more info or')
+##            print ('md5check.py --unzip --gui --sign_out --input <input filename>')
+##            sys.exit(2)
+
+    def setupGUI(self):
+        self.root.wm_title("md5check v" + VERSION)
+        self.root.resizable(0,0)
+
+        ################ Top Frame ################
+        frame_toparea = ttk.Frame(self.root)
+        frame_toparea.pack(side = TOP, fill=X, expand=False)
+        frame_toparea.config(relief = RIDGE, borderwidth = 3)
         
-        try:
-            opts, args = getopt.getopt(sys.argv[1:], "v:i:zgsh",["verify=","input=","unzip","gui","sign_out"])
-            
-            for opt, arg in opts:
-                if opt == '-h':
-                    print('Usage: md5check.py --unzip --gui --sign_out --input <input filename> --verify <input filename>')
-                    print('    where: --unzip or -z      will attempt to unzip input file')
-                    print('           --gui or -g        will display a File Chooser window to select the file')
-                    print('           --sign_out or -s   generates a SHA1 hash file output')
-                    print('           --input or -i      the ZIP file to be processed')
-                    print('           --verify or -v     will attempt to verify the sigs file')
-                    sys.exit()
-                elif opt in ("-i", "--input"):
-                    self.filepath_zip = arg
-                elif opt in ("-z", "--unzip"):
-                    self.unzipflag = True
-                elif opt in ("-g", "--gui"):
-                    self.rungui = True
-                elif opt in ("-s", "--sign_out"):
-                    self.signfile = True
-                elif opt in ("-v", "--verify"):
-                    self.filepath_zip = arg
-                    self.runverify = True
+        ttk.Label(frame_toparea, justify=LEFT,
+                  text = 'This script verifies the MD5 Hashes of XML Submissions').grid(row = 0, columnspan=2, padx=3, pady=3)
 
-            if self.rungui == True:
-                Thread(target=self.askforfile()).start()
-            else:
-                self.handlearguments()
+        # Button to Select Archive Files
+        button_Choose_TAB_delimited_file = ttk.Button(frame_toparea, text = "Select Archive Files...",
+                                                      command = lambda: self.handleButtonPress('__tab_delimited_file__'))                                             
+        button_Choose_TAB_delimited_file.grid(row=1, column=0, padx=3, pady=3, sticky='w')
 
-        except getopt.GetoptError:
-            print('try: md5check.py -h for more info or')
-            print ('md5check.py --unzip --gui --sign_out --input <input filename>')
-            sys.exit(2)
+        # Text Area - Archive File List
+        self.archive_filelist_tf = Text(frame_toparea, width = 50, height=10)
+        self.archive_filelist_tf.grid(row=2, column=0)
+
+        ################ Bottom FRAME ##############
+        frame_bottombuttons = ttk.Frame(self.root)
+        frame_bottombuttons.pack(side=BOTTOM, fill=X, expand = False)
+        frame_bottombuttons.config(relief = RIDGE, borderwidth = 3)
+               
+        # Check Button - Unzip Archive
+        self.unzipcheck = IntVar()
+        self.unzipcheck.set(0)
+        self.cb_unzipcheck = Checkbutton(frame_bottombuttons, 
+            text="Unzip Archive", 
+            justify=LEFT, 
+            variable = self.unzipcheck, 
+            onvalue=1, 
+            offvalue=0)
+        self.cb_unzipcheck.grid(row=0, column=0, sticky='e',)
+
+        # Check Button - Sign Archive
+        self.signcheck = IntVar()
+        self.signcheck.set(1)
+        self.cb_signcheck = Checkbutton(frame_bottombuttons, 
+            text="Sign Output", 
+            justify=LEFT, 
+            variable = self.signcheck, 
+            onvalue=1, 
+            offvalue=0)
+        self.cb_signcheck.grid(row=0, column=1, sticky='e',)
+
+        # Check Button - Verify
+        self.verifycheck = IntVar()
+        self.verifycheck.set(0)
+        self.cb_verifycheck = Checkbutton(frame_bottombuttons, 
+            text="Verify Signature Archives", 
+            justify=LEFT, 
+            variable = self.verifycheck, 
+            onvalue=1, 
+            offvalue=0)
+        self.cb_verifycheck.grid(row=0, column=2, sticky='e',)
+
+##        # Text Entry       
+##        self.current_tsl_filename_tf = ttk.Entry(self.root, width = 50)
+##        self.current_tsl_filename_tf.grid(row=2, column=1)
+##
+##        ttk.Label(self.root, text = 'Enter new TSL filename: ').grid(row = 3, column=0, sticky='e', padx=3, pady=3)
+##
+##        self.v = StringVar()
+##        self.v.set("qcas_2015_05_v02.tsl")
+##        self.new_tsl_filename_tf = ttk.Entry(self.root, width = 50, textvariable=self.v)
+##        self.new_tsl_filename_tf.grid(row=3, column=1, padx=3, pady=3)
+##
+##        # Button
+##        button_start = ttk.Button(self.root, text = "Start...",
+##                                  command = lambda: self.handleButtonPress('__start__'))
+##        button_start.grid(row=4, columnspan=2, sticky='se', padx=5, pady=5)        
+        self.root.mainloop()
 
 def main():
     if (len(sys.argv) < 1):
