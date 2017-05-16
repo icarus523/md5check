@@ -50,6 +50,7 @@ class md5check:
         return m.hexdigest()
 
     def pprinttable(self, rows, outfile="default_signed_output.txt"):
+        print("\n")
         if len(rows) > 1:
             headers = rows[0]._fields
             lens = []
@@ -89,27 +90,28 @@ class md5check:
                         f.write(("%*s = %s" % (hwidth,row._fields[i],row[i])))
                 else:    
                     print ("%*s = %s" % (hwidth,row._fields[i],row[i]))
+        print("\n")
 
-    def compareresult(self, text):
+    def compareresult(self, text, currentdir, filename_md5, signfilename):
         strcompare = str(text).upper().strip(' ')
-        with open(os.path.join(self.currentdir, self.filename_md5), 'r') as f:
+        with open(os.path.join(currentdir, filename_md5), 'r') as f:
             md5text = f.read().upper().strip(' ,\n,\r')
             textfixed = str(text).upper().strip(' ')
             
             Row = namedtuple('Row',['Filename','Expected_md5_checksum','Calculated_md5_checksum'])
-            self.data = Row(self.filename_md5, md5text, textfixed)
+            self.data = Row(filename_md5, md5text, textfixed)
             self.dataempty = Row("-", "-", "-")
-            self.pprinttable([self.data, self.dataempty], os.path.join(self.currentdir, self.signfilename))
+            self.pprinttable([self.data, self.dataempty], os.path.join(currentdir, signfilename))
 
             if textfixed == md5text:
                 return True
             else:
                 return False
 
-    def processfile(self, filepath_zip):
-        #h = self.do_md5(self.filepath_zip, MAXIMUM_BLOCKSIZE_TO_READ)
+    def processfile(self, filepath_zip, currentdir, signfilename, filename_md5):
         h = self.do_md5(filepath_zip, MAXIMUM_BLOCKSIZE_TO_READ)
-        matches = self.compareresult(h)
+        
+        matches = self.compareresult(h, currentdir, filename_md5, signfilename)
 
         if (matches):
             print("Matches!")
@@ -121,11 +123,11 @@ class md5check:
         if (self.unzipflag == True):
             print("Unzipping file...Please Wait.")
             #Thread(target=self.unzip(self.filepath_zip, self.currentdir)).start()
-            self.unzip(filepath_zip, self.currentdir)
+            self.unzip(filepath_zip, currentdir)
         # Add SHA1 hash calc over the generated file     
         if (self.signfile == True):
-            print("Signing file..." + self.signfilename)
-            self.signfileoutput(os.path.join(self.currentdir, self.signfilename), os.path.join(self.currentdir, self.signfilename))
+            print("Signing file..." + signfilename)
+            self.signfileoutput(os.path.join(currentdir, signfilename), os.path.join(currentdir, signfilename))
 
     def signfileoutput(self, infile, outfile):
         h = self.dohash_sha1(infile)
@@ -154,28 +156,23 @@ class md5check:
                 zf.extract(file, dest_dir)
     
     def handlearguments(self):
-        Submission = {}
-        self.SubmissionList = list()
-        for item in self.filepath_zip:
-            logging.debug("Item is: " + item + ". Filepath_zip is: " + self.filepath_zip)
+        # self.Archive_Filename_List
+        for item in self.archive_filelist:
+            logging.debug("Processing File: " + item)
             if (os.path.isfile(str(item))):
                 if (self.runverify == False):
-                    self.filename_zip =  os.path.basename(item)
-                    submission = {
-                        'filename_zip' : os.path.basename(item),
-                        'filename_md5' : os.path.basename(item).rstrip("zip") + "md5",
-                        'currentdir' : os.path.dirname(self.filepath_zip)
-                    }
-                    self.SubmissionList.append(submission)
-                    #self.filename_md5 = self.filename_zip.rstrip("zip") + "md5"
-                    #self.currentdir = os.path.dirname(self.filepath_zip)
-                    #print("Processing: " + self.filename_zip +
-                    #       " and " + self.filename_md5)
-                    logging.info("Processing: " + submission[filename_zip] +
-                           " and " + submission[filename_md5])
-                    self.signfilename = self.filename_zip[:-4] + '_signed_output.sigs'
+                    filename_zip =  os.path.basename(item)
+                    filename_md5 = filename_zip.rstrip("zip") + "md5"
+                    currentdir = os.path.dirname(item)
+
+                    logging.info("Processing: " + filename_zip +
+                           " and " + filename_md5)
+                    
+                    signfilename = filename_zip[:-4] + '_signed_output.sigs'
+
                     # Start Thread for ProcessFile()
-                    Thread(target=self.processfile(item)).start()
+                    # (filepath_zip, currentdir, signfilename, filename_md5)
+                    Thread(target=self.processfile(item, currentdir, signfilename, filename_md5)).start()
                 else:
                     self.currentdir = os.path.dirname(item)
                     # Start Thread for Verify File()
@@ -234,6 +231,7 @@ class md5check:
         self.rungui = False
         self.unzipflag = False
         self.runverify = False
+        self.Archive_Filename_List = list()
         logging.basicConfig(level=logging.DEBUG, format=' %(asctime)s - %(levelname)s- %(message)s')
         logging.debug('Start of md5check')
 
@@ -284,22 +282,25 @@ class md5check:
         frame_toparea.config(relief = RIDGE, borderwidth = 3)
         
         ttk.Label(frame_toparea, justify=LEFT,
-                  text = 'This script verifies the MD5 Hashes of XML Submissions').grid(row = 0, columnspan=2, padx=3, pady=3)
+                  text = 'This script verifies the MD5 Hashes of XML Submissions').grid(row = 0, columnspan=4, padx=3, pady=3)
 
         # Button to Select Archive Files
-        button_Choose_TAB_delimited_file = ttk.Button(frame_toparea, text = "Select Archive Files...",
-                                                      command = lambda: self.handleButtonPress('__tab_delimited_file__'))                                             
-        button_Choose_TAB_delimited_file.grid(row=1, column=0, padx=3, pady=3, sticky='w')
+        button_Selectfiles = ttk.Button(frame_toparea, text = "1. Select Archive Files...",
+                                                      command = lambda: self.handleButtonPress('__select_files__'))                                             
+        button_Selectfiles.grid(row=1, column=0, padx=3, pady=3, sticky='w')
 
         # Text Area - Archive File List
-        self.archive_filelist_tf = Text(frame_toparea, width = 50, height=10)
-        self.archive_filelist_tf.grid(row=2, column=0)
+        self.archive_filelist_tf = Text(frame_toparea, width = 58, height=10)
+        self.archive_filelist_tf.grid(row=2, columnspan=4)
 
         ################ Bottom FRAME ##############
         frame_bottombuttons = ttk.Frame(self.root)
         frame_bottombuttons.pack(side=BOTTOM, fill=X, expand = False)
         frame_bottombuttons.config(relief = RIDGE, borderwidth = 3)
-               
+
+        ttk.Label(frame_bottombuttons, justify=LEFT,
+                  text = '2. Select Options:').grid(row = 0, column = 0, padx=3, pady=3)
+     
         # Check Button - Unzip Archive
         self.unzipcheck = IntVar()
         self.unzipcheck.set(0)
@@ -309,7 +310,7 @@ class md5check:
             variable = self.unzipcheck, 
             onvalue=1, 
             offvalue=0)
-        self.cb_unzipcheck.grid(row=0, column=0, sticky='e',)
+        self.cb_unzipcheck.grid(row=0, column=1, sticky='e',)
 
         # Check Button - Sign Archive
         self.signcheck = IntVar()
@@ -320,7 +321,7 @@ class md5check:
             variable = self.signcheck, 
             onvalue=1, 
             offvalue=0)
-        self.cb_signcheck.grid(row=0, column=1, sticky='e',)
+        self.cb_signcheck.grid(row=0, column=2, sticky='e',)
 
         # Check Button - Verify
         self.verifycheck = IntVar()
@@ -331,24 +332,37 @@ class md5check:
             variable = self.verifycheck, 
             onvalue=1, 
             offvalue=0)
-        self.cb_verifycheck.grid(row=0, column=2, sticky='e',)
+        self.cb_verifycheck.grid(row=0, column=3, sticky='e',)
 
-##        # Text Entry       
-##        self.current_tsl_filename_tf = ttk.Entry(self.root, width = 50)
-##        self.current_tsl_filename_tf.grid(row=2, column=1)
-##
-##        ttk.Label(self.root, text = 'Enter new TSL filename: ').grid(row = 3, column=0, sticky='e', padx=3, pady=3)
-##
-##        self.v = StringVar()
-##        self.v.set("qcas_2015_05_v02.tsl")
-##        self.new_tsl_filename_tf = ttk.Entry(self.root, width = 50, textvariable=self.v)
-##        self.new_tsl_filename_tf.grid(row=3, column=1, padx=3, pady=3)
-##
-##        # Button
-##        button_start = ttk.Button(self.root, text = "Start...",
-##                                  command = lambda: self.handleButtonPress('__start__'))
-##        button_start.grid(row=4, columnspan=2, sticky='se', padx=5, pady=5)        
+
+        # Button to Start MD5 Hash
+        button_Selectfiles = ttk.Button(frame_bottombuttons, text = "3. Start",
+                                                      command = lambda: self.handleButtonPress('__start__'))                                             
+        button_Selectfiles.grid(row=1, columnspan=4, padx=3, pady=3, sticky='s')
+
+ 
         self.root.mainloop()
+
+    def handleButtonPress(self, myButtonPress):
+
+        if myButtonPress == '__select_files__':
+            if (os.name == 'nt'): # Windows OS
+                tmp = filedialog.askopenfilenames(initialdir='.')
+            elif (os.name == 'posix'): # Linux OS
+                tmp = filedialog.askopenfilenames(initialdir='.')
+            else: 
+                tmp = filedialog.askopenfilenames(initialdir='.')
+
+            if tmp:
+                self.archive_filelist_tf.delete(1.0, END)
+                self.archive_filelist = tmp
+                for fname in self.archive_filelist:
+                    fname_basename = os.path.basename(fname)
+                    self.Archive_Filename_List.append(fname_basename) #used only on GUI
+                    self.archive_filelist_tf.insert(1.0, fname_basename + "; ")
+
+        if myButtonPress == '__start__':
+            self.handlearguments()
 
 def main():
     if (len(sys.argv) < 1):
