@@ -113,21 +113,25 @@ class md5check:
         matches = self.compareresult(h, currentdir, filename_md5, signfilename)
 
         if (matches):
+            messagebox.showinfo("Expected Hash Matches", "Calculated MD5 Hash: " + h.upper() + "\nMatches with expected MD5 Hash!")
             logging.debug("Matches!")
-        else:
-            logging.critical("Doesn't match! - Abort!")
-            sys.exit(1)
-
-        # Unzip archive
-        if (self.unzipflag.get() == 1):
-            logging.info("Unzipping file..." + filepath_zip)
-            Thread(target=self.unzip(filepath_zip, currentdir)).start()
-            #self.unzip(filepath_zip, currentdir) # Too slow remove threading
         
-        # Add SHA1 hash calc over the generated file     
-        if (self.signfile.get() == 1):
-            logging.info("Signing file..." + signfilename)
-            self.signfileoutput(os.path.join(currentdir, signfilename), os.path.join(currentdir, signfilename))
+             # Unzip archive
+            if (self.unzipflag.get() == 1):
+                logging.info("Unzipping file..." + filepath_zip)
+                Thread(target=self.unzip(filepath_zip, currentdir)).start()
+                #self.unzip(filepath_zip, currentdir) # Too slow remove threading
+        
+            # Add SHA1 hash calc over the generated file     
+            if (self.signfile.get() == 1):
+                logging.info("Signing file..." + signfilename)
+                self.signfileoutput(os.path.join(currentdir, signfilename), os.path.join(currentdir, signfilename))
+        else:
+            messagebox.showinfo("Expected Hash Did Not Match!", "Calculated MD5 Hash:" + h + ", Failed when compared with expected MD5 Hash!")
+            logging.critical("Doesn't match! - Abort!")
+            #sys.exit(0)
+
+       
 
     def signfileoutput(self, infile, outfile):
         h = self.dohash_sha1(infile)
@@ -194,6 +198,15 @@ class md5check:
             h = self.dohash_sha1(self.stripfile(fname))
             logging.info("Filename: " + os.path.basename(fname))
             logging.info("SHA1 Hash Recalculated: " + str(h).upper())
+            # We uppercase in Written SIGS file, make sure you uppercase before comparing
+            if h.upper() in open(os.path.basename(fname)).read(): # HAX0Rs
+                messagebox.showinfo("SIGS File Verified!", "Calculated SHA1 Hash:" + h.upper() 
+                    + ",\nMatches with expected Hash in SIGS file")
+                logging.info("SIGS file: Verified")
+            else: 
+                messagebox.showinfo("SIGS File Unverifiable!", "Calculated SHA1 Hash:" 
+                    + h.upper() + ",\nDid not matches with expected Hash in SIGS file!\n\nFAIL!")
+                logging.info("SIGS file: Verified")    
         else:
             logging.error("Expected a .SIGS file, If verifying mode make sure to select a SIGS file instead.")
 
@@ -217,14 +230,11 @@ class md5check:
 
         ################ Top Frame ################
         frame_toparea = ttk.Frame(self.root)
-        frame_toparea.pack(side = TOP, fill=X, expand=False)
-        frame_toparea.config(relief = RIDGE, borderwidth = 3)
+        frame_toparea.pack(side = TOP, padx = 3, pady=3,  fill=X, expand=False)
+        frame_toparea.config(relief = FLAT, borderwidth = 3)
         
         ttk.Label(frame_toparea, justify=CENTER,
                   text = 'This script verifies the MD5 Hashes of LTFO XML Submissions').pack(side=TOP, padx=3, pady=3, fill=X, expand=True, anchor='n')        
-
-        frame_Header = ttk.Labelframe(frame_toparea, text ='\nIf Generating SIGS file, select ZIP archive\nIf Verifying SIGS file select SIGS file,\nthen Press Start\n')
-        frame_Header.pack(side = TOP, padx = 3, pady=3, fill=X, expand =True)
 
         # Radio Button modes
         MODES = [
@@ -238,21 +248,32 @@ class md5check:
         self.signfile = IntVar()
         self.signfile.set(1)
 
-        Label(frame_Header, text="1. Select Mode: ").pack(side = LEFT, anchor="w", padx=3, pady = 3, fill=X, expand=False) 
+
+        frame_mode = ttk.Frame(frame_toparea)
+        frame_mode.pack(side=TOP, fill=X, expand = True)
+        frame_mode.config(relief=FLAT, borderwidth=3)
+        Label(frame_mode, text="1. Select Mode: ").pack(side = LEFT, anchor="w", padx=3, pady = 3, fill=X, expand=False) 
         for text, mode in MODES:
-            b = ttk.Radiobutton(frame_Header, text=text, variable=self.vars_rb_mode, value=mode, command=self.HandleRadioButton)
+            b = ttk.Radiobutton(frame_mode, text=text, variable=self.vars_rb_mode, value=mode, command=self.HandleRadioButton)
             b.pack(side = LEFT, anchor="w")
 
+        frame_Header = ttk.Frame(frame_toparea)
+        frame_Header.pack(side = TOP, padx = 3, pady=3, fill=X, expand =True)
+        frame_Header.config(relief=RIDGE, borderwidth=3)
+
+        ttk.Label(frame_Header, justify=CENTER,
+            text ='If Generating SIGS file: Select ZIP archive,\nIf Verifying SIGS file: select SIGS file,\nthen Press Start').pack(side = TOP, anchor='w', padx=3, pady = 3, fill=X, expand=True) 
+
         # Button to Select Archive Files
-        button_Selectfiles = ttk.Button(frame_toparea, text = "2. Select Files...",
+        button_Selectfiles = ttk.Button(frame_Header, text = "2. Select Files...",
                                                       command = lambda: self.handleButtonPress('__select_files__'))                                             
         button_Selectfiles.pack(side = TOP, padx = 3, pady = 3, expand = True, anchor="w")
 
-        frame_Body = ttk.Labelframe(frame_toparea, text ='Files Selected:')
+        frame_Body = ttk.Labelframe(frame_Header, text ='Files Selected:')
         frame_Body.pack(side = LEFT, padx = 3, pady=3, fill=X, expand =True)
 
         # Text Area - Archive File List
-        self.archive_filelist_tf = Text(frame_Body, width = 58, height=5)
+        self.archive_filelist_tf = Text(frame_Body, width = 50, height=5)
         S = Scrollbar(frame_Body, command=self.archive_filelist_tf.yview)
         S.pack(side=RIGHT, fill=Y)
         self.archive_filelist_tf.configure(yscrollcommand=S.set)
@@ -261,39 +282,51 @@ class md5check:
 
         ################ Bottom FRAME ##############
         frame_bottombuttons = ttk.Frame(self.root)
-        frame_bottombuttons.pack(side=BOTTOM, fill=X, expand = False)
-        frame_bottombuttons.config(relief = RIDGE, borderwidth = 3)
+        frame_bottombuttons.pack(side=BOTTOM, padx = 3, pady=3, fill=X, expand = True)
+        frame_bottombuttons.config(relief = RIDGE, borderwidth = 0)
 
-        ttk.Label(frame_bottombuttons, justify=LEFT,
-                  text = '3. Select Options:').grid(row = 0, column = 0, padx=3, pady=3)
+        frame_Options = ttk.Frame(frame_bottombuttons)
+        frame_Options.pack(side=TOP, padx = 3, pady=3, fill=X, expand = True)
+        #grid(row=0,columnspan=4)
+        #
+        frame_Options.config(relief = RIDGE, borderwidth = 0)
+
+        ttk.Label(frame_Options, justify=LEFT,
+                  text = '3. Select Options:').pack(side = LEFT, padx = 3, pady = 3, fill=X, expand = True, anchor='w')
      
         # Check Button - Unzip Archive
         self.unzipflag = IntVar()
         self.unzipflag.set(0)
-        self.cb_unzipcheck = Checkbutton(frame_bottombuttons, 
+        self.cb_unzipcheck = Checkbutton(frame_Options, 
             text="Unzip Archive", 
             justify=LEFT, 
             variable = self.unzipflag, 
             onvalue=1, 
             offvalue=0)
-        self.cb_unzipcheck.grid(row=0, column=1, sticky='e',)
+        self.cb_unzipcheck.pack(side = LEFT, padx = 3, pady = 3, fill=X, expand = True, anchor='w')
 
-        ttk.Label(frame_bottombuttons, justify=LEFT,
-                  text = 'Log Level:').grid(row = 1, column=0, padx=3, pady=3, sticky = 'e')
+        ttk.Label(frame_Options, justify=LEFT,
+                  text = 'Log Level:').pack(side=LEFT, padx=3, pady=3, fill=X, expand = True, anchor='w')
+        #grid(row = 1, column=0, padx=3, pady=3, sticky = 'e')
         Logging_Levels = [ 'DEBUG', 'INFO', 'WARNING', 'ERROR' ]
 
         # Combo Box for Logging Details
         self.cbLogging = StringVar()
-        self.combobox_cbLogging = ttk.Combobox(frame_bottombuttons, justify=LEFT, textvariable=self.cbLogging, width = 10, state='normal')
-        self.combobox_cbLogging.grid(row = 1, column=2, sticky = 'w', pady=3, padx=3)
+        self.combobox_cbLogging = ttk.Combobox(frame_Options, justify=LEFT, textvariable=self.cbLogging, width = 10, state='normal')
+        self.combobox_cbLogging.pack(side=LEFT, padx=3, pady=3, fill=X, expand = True, anchor='s')
+        #grid(row = 1, column=2, sticky = 'w', pady=3, padx=3)
         self.combobox_cbLogging.set('DEBUG')
         self.combobox_cbLogging['values'] = Logging_Levels # generate values based on Template List
         self.combobox_cbLogging.bind('<<ComboboxSelected>>', self.handleComboBoxChanges_Logging)
 
         # Button to Start MD5 Hash
-        button_Selectfiles = ttk.Button(frame_bottombuttons, text = "4. Start Processing",
+        frame_bottomelements = ttk.Frame(frame_bottombuttons)
+        frame_bottomelements.pack(side=BOTTOM, padx = 3, pady=3, fill=X, expand = True)
+        frame_bottomelements.config(relief = FLAT, borderwidth = 0)
+
+        button_Selectfiles = ttk.Button(frame_bottomelements, text = "4. Start Processing",
             command = lambda: self.handleButtonPress('__start__'))                                             
-        button_Selectfiles.grid(row=3, columnspan=4, padx=3, pady=3, sticky='w')
+        button_Selectfiles.pack(side = BOTTOM, padx = 3, pady = 3, fill=X, expand = True, anchor='w')
 
         self.root.mainloop()
 
