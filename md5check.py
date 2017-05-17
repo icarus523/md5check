@@ -50,7 +50,6 @@ class md5check:
         return m.hexdigest()
 
     def pprinttable(self, rows, outfile="default_signed_output.txt"):
-        print("\n")
         if len(rows) > 1:
             headers = rows[0]._fields
             lens = []
@@ -67,30 +66,30 @@ class md5check:
             pattern = " | ".join(formats)
             hpattern = " | ".join(hformats)
             separator = "-+-".join(['-' * n for n in lens])
-            if (self.signfile == True):
+            # Display Results
+            logging.info(hpattern % tuple(headers))
+            logging.info(separator)
+
+            if (self.signfile.get() == 1):
                 with open (outfile, 'w') as f:
                     f.write("File generated on: " + str(datetime.now()) + " by: " + getpass.getuser() + "\n")
                     f.write(hpattern % tuple(headers) + "\n")
                     f.write(separator + "\n")
-            else:
-                print(hpattern % tuple(headers))
-                print(separator)
+
             for line in rows:
-                if (self.signfile == True):
+                logging.info(pattern % tuple(line))
+                if (self.signfile.get() == 1):
                     with open (outfile, 'a') as f:
                         f.write(pattern % tuple(line) + "\n")
-                else: 
-                    print(pattern % tuple(line))
+                        
         elif len(rows) == 1:
             row = rows[0]
             hwidth = len(max(row._fields,key=lambda x: len(x)))
             for i in range(len(row)):
-                if (self.signfile == True):
+                logging.info ("%*s = %s" % (hwidth,row._fields[i],row[i]))
+                if (self.signfile.get() == 1):
                     with open (outfile, 'a') as f:
                         f.write(("%*s = %s" % (hwidth,row._fields[i],row[i])))
-                else:    
-                    print ("%*s = %s" % (hwidth,row._fields[i],row[i]))
-        print("\n")
 
     def compareresult(self, text, currentdir, filename_md5, signfilename):
         strcompare = str(text).upper().strip(' ')
@@ -114,19 +113,20 @@ class md5check:
         matches = self.compareresult(h, currentdir, filename_md5, signfilename)
 
         if (matches):
-            print("Matches!")
+            logging.debug("Matches!")
         else:
-            print("Doesn't match! - Abort!")
+            logging.critical("Doesn't match! - Abort!")
             sys.exit(1)
 
         # Unzip archive
-        if (self.unzipflag == True):
-            print("Unzipping file...Please Wait.")
-            #Thread(target=self.unzip(self.filepath_zip, self.currentdir)).start()
-            self.unzip(filepath_zip, currentdir)
+        if (self.unzipflag.get() == 1):
+            logging.info("Unzipping file..." + filepath_zip)
+            Thread(target=self.unzip(filepath_zip, currentdir)).start()
+            #self.unzip(filepath_zip, currentdir) # Too slow remove threading
+        
         # Add SHA1 hash calc over the generated file     
-        if (self.signfile == True):
-            print("Signing file..." + signfilename)
+        if (self.signfile.get() == 1):
+            logging.info("Signing file..." + signfilename)
             self.signfileoutput(os.path.join(currentdir, signfilename), os.path.join(currentdir, signfilename))
 
     def signfileoutput(self, infile, outfile):
@@ -146,21 +146,19 @@ class md5check:
         with zipfile.ZipFile(source_filename) as zf:          
             uncompress_size = sum((file.file_size for file in zf.infolist())) 
             extracted_size = 0
-            #print('uncompressed size: ' + str(uncompress_size) + ' bytes')
+            logging.debug('uncompressed size: ' + str(uncompress_size) + ' bytes')
             
             for file in zf.infolist():
                 extracted_size += file.file_size
-                percentage = extracted_size * 100/uncompress_size
-		#self.pBar["value"] = percentage
-                print("%6.2f %%\r" % (float(percentage)))
+                percentage = extracted_size * 100/uncompress_size #file.filename + 
+                logging.info("%-30s %6.2f %%\r" % ( file.filename, float(percentage)))
                 zf.extract(file, dest_dir)
     
     def handlearguments(self):
-        # self.Archive_Filename_List
         for item in self.archive_filelist:
             logging.debug("Processing File: " + item)
             if (os.path.isfile(str(item))):
-                if (self.runverify == False):
+                if (self.signfile.get() == 1):
                     filename_zip =  os.path.basename(item)
                     filename_md5 = filename_zip.rstrip("zip") + "md5"
                     currentdir = os.path.dirname(item)
@@ -171,19 +169,19 @@ class md5check:
                     signfilename = filename_zip[:-4] + '_signed_output.sigs'
 
                     # Start Thread for ProcessFile()
-                    # (filepath_zip, currentdir, signfilename, filename_md5)
                     Thread(target=self.processfile(item, currentdir, signfilename, filename_md5)).start()
-                else:
+                
+                if self.runverify.get() == 1:
+                    logging.info("Verifying SIGS file Mode")
+                    # Verify SIGS
                     self.currentdir = os.path.dirname(item)
                     # Start Thread for Verify File()
                     Thread(target=self.verifyfile(item)).start()
             else:
-                logging.error("Expecting to read file: <" + item + "> " + 
-                    "Please confirm input parameters.")
-                sys.exit(2)
+                logging.critical("Expecting to read file: <" + item + "> " + 
+                    "Please confirm file input.")
 
     def stripfile(self, fname, outfile="tmp.txt"):
-        
         with open(fname,'r') as oldfile, open (os.path.join(self.currentdir, outfile), 'w+') as newfile:
             for line in oldfile:
                 if line.startswith('#'):
@@ -194,83 +192,24 @@ class md5check:
     def verifyfile(self, fname):
         if (fname.upper().endswith('.SIGS')):
             h = self.dohash_sha1(self.stripfile(fname))
-            print("Filename: " + os.path.basename(fname))
-            print("SHA1 Hash Recalculated: " + str(h).upper())
+            logging.info("Filename: " + os.path.basename(fname))
+            logging.info("SHA1 Hash Recalculated: " + str(h).upper())
         else:
-            print("Expected a .sigs file, verify input file")
-            sys.exit(2)
-
-    def askforfile(self):
-        tmp = filedialog.askopenfile(initialdir='.')
-        if tmp:
-            self.filepath_zip = tmp.name
-            self.filename_zip = os.path.basename(self.filepath_zip)
-            self.currentdir = os.path.dirname(self.filepath_zip)
-            self.filename_md5 = self.filename_zip.rstrip("zip") + "md5"
-            if (self.runverify == True):
-                print("Verifying: " + self.filepath_zip)
-            else: 
-                print("Processing: " + self.filename_zip + " and " + self.filename_md5)
-
-        for item in self.filename_zip: # handle multiple inputs
-            #self.signfilename = self.filename_zip[:-4] + '_signed_output.sigs'
-            self.signfilename = item[:-4] + '_signed_output.sigs'
-
-            if (self.runverify == True):
-            #Thread(target=self.verify(self.filepath_zip)).start()
-                #self.verify(self.filepath_zip)
-                self.verify(self.filepath_zip)
-            else:
-                Thread(target=self.processfile(item)).start()
+            logging.error("Expected a .SIGS file, If verifying mode make sure to select a SIGS file instead.")
 
     def __init__(self):
         self.filename_zip = ''
         self.filepath_zip = ''
         self.filename_md5 = ''
-        self.signfile = False
         self.rungui = False
-        self.unzipflag = False
-        self.runverify = False
         self.Archive_Filename_List = list()
-        logging.basicConfig(level=logging.DEBUG, format=' %(asctime)s - %(levelname)s- %(message)s')
-        logging.debug('Start of md5check')
+        self.logging_choice = logging.DEBUG
+
+        logging.basicConfig(level= self.logging_choice, format=' %(asctime)s - %(levelname)s- %(message)s')
+        logging.debug('Start of md5check.py')
 
         self.root = Tk()
         self.setupGUI()
-
-##        try:
-##            opts, args = getopt.getopt(sys.argv[1:], "v:i:zgsh",["verify=","input=","unzip","gui","sign_out"])
-##            
-##            for opt, arg in opts:
-##                if opt == '-h':
-##                    print('Usage: md5check.py --unzip --gui --sign_out --input <input filename> --verify <input filename>')
-##                    print('    where: --unzip or -z      will attempt to unzip input file')
-##                    print('           --gui or -g        will display a File Chooser window to select the file')
-##                    print('           --sign_out or -s   generates a SHA1 hash file output')
-##                    print('           --input or -i      the ZIP file to be processed')
-##                    print('           --verify or -v     will attempt to verify the sigs file')
-##                    sys.exit()
-##                elif opt in ("-i", "--input"):
-##                    self.filepath_zip = arg
-##                elif opt in ("-z", "--unzip"):
-##                    self.unzipflag = True
-##                elif opt in ("-g", "--gui"):
-##                    self.rungui = True
-##                elif opt in ("-s", "--sign_out"):
-##                    self.signfile = True
-##                elif opt in ("-v", "--verify"):
-##                    self.filepath_zip = arg
-##                    self.runverify = True
-##
-##            if self.rungui == True:
-##                Thread(target=self.askforfile()).start()
-##            else:
-##                self.handlearguments()
-##
-##        except getopt.GetoptError:
-##            print('try: md5check.py -h for more info or')
-##            print ('md5check.py --unzip --gui --sign_out --input <input filename>')
-##            sys.exit(2)
 
     def setupGUI(self):
         self.root.wm_title("md5check v" + VERSION)
@@ -281,17 +220,44 @@ class md5check:
         frame_toparea.pack(side = TOP, fill=X, expand=False)
         frame_toparea.config(relief = RIDGE, borderwidth = 3)
         
-        ttk.Label(frame_toparea, justify=LEFT,
-                  text = 'This script verifies the MD5 Hashes of XML Submissions').grid(row = 0, columnspan=4, padx=3, pady=3)
+        ttk.Label(frame_toparea, justify=CENTER,
+                  text = 'This script verifies the MD5 Hashes of LTFO XML Submissions').pack(side=TOP, padx=3, pady=3, fill=X, expand=True, anchor='n')        
+
+        frame_Header = ttk.Labelframe(frame_toparea, text ='\nIf Generating SIGS file, select ZIP archive\nIf Verifying SIGS file select SIGS file,\nthen Press Start\n')
+        frame_Header.pack(side = TOP, padx = 3, pady=3, fill=X, expand =True)
+
+        # Radio Button modes
+        MODES = [
+            ("Generate SIGS File", "1"),
+            ("Verify SIGS File","2"),
+        ]
+        self.vars_rb_mode = IntVar()
+        self.vars_rb_mode.set(1)
+        self.runverify = IntVar()
+        self.runverify.set(0)
+        self.signfile = IntVar()
+        self.signfile.set(1)
+
+        Label(frame_Header, text="1. Select Mode: ").pack(side = LEFT, anchor="w", padx=3, pady = 3, fill=X, expand=False) 
+        for text, mode in MODES:
+            b = ttk.Radiobutton(frame_Header, text=text, variable=self.vars_rb_mode, value=mode, command=self.HandleRadioButton)
+            b.pack(side = LEFT, anchor="w")
 
         # Button to Select Archive Files
-        button_Selectfiles = ttk.Button(frame_toparea, text = "1. Select Archive Files...",
+        button_Selectfiles = ttk.Button(frame_toparea, text = "2. Select Files...",
                                                       command = lambda: self.handleButtonPress('__select_files__'))                                             
-        button_Selectfiles.grid(row=1, column=0, padx=3, pady=3, sticky='w')
+        button_Selectfiles.pack(side = TOP, padx = 3, pady = 3, expand = True, anchor="w")
+
+        frame_Body = ttk.Labelframe(frame_toparea, text ='Files Selected:')
+        frame_Body.pack(side = LEFT, padx = 3, pady=3, fill=X, expand =True)
 
         # Text Area - Archive File List
-        self.archive_filelist_tf = Text(frame_toparea, width = 58, height=10)
-        self.archive_filelist_tf.grid(row=2, columnspan=4)
+        self.archive_filelist_tf = Text(frame_Body, width = 58, height=5)
+        S = Scrollbar(frame_Body, command=self.archive_filelist_tf.yview)
+        S.pack(side=RIGHT, fill=Y)
+        self.archive_filelist_tf.configure(yscrollcommand=S.set)
+        self.archive_filelist_tf.pack(side=LEFT, fill=BOTH, expand=True)
+
 
         ################ Bottom FRAME ##############
         frame_bottombuttons = ttk.Frame(self.root)
@@ -299,52 +265,65 @@ class md5check:
         frame_bottombuttons.config(relief = RIDGE, borderwidth = 3)
 
         ttk.Label(frame_bottombuttons, justify=LEFT,
-                  text = '2. Select Options:').grid(row = 0, column = 0, padx=3, pady=3)
+                  text = '3. Select Options:').grid(row = 0, column = 0, padx=3, pady=3)
      
         # Check Button - Unzip Archive
-        self.unzipcheck = IntVar()
-        self.unzipcheck.set(0)
+        self.unzipflag = IntVar()
+        self.unzipflag.set(0)
         self.cb_unzipcheck = Checkbutton(frame_bottombuttons, 
             text="Unzip Archive", 
             justify=LEFT, 
-            variable = self.unzipcheck, 
+            variable = self.unzipflag, 
             onvalue=1, 
             offvalue=0)
         self.cb_unzipcheck.grid(row=0, column=1, sticky='e',)
 
-        # Check Button - Sign Archive
-        self.signcheck = IntVar()
-        self.signcheck.set(1)
-        self.cb_signcheck = Checkbutton(frame_bottombuttons, 
-            text="Sign Output", 
-            justify=LEFT, 
-            variable = self.signcheck, 
-            onvalue=1, 
-            offvalue=0)
-        self.cb_signcheck.grid(row=0, column=2, sticky='e',)
+        ttk.Label(frame_bottombuttons, justify=LEFT,
+                  text = 'Log Level:').grid(row = 1, column=0, padx=3, pady=3, sticky = 'e')
+        Logging_Levels = [ 'DEBUG', 'INFO', 'WARNING', 'ERROR' ]
 
-        # Check Button - Verify
-        self.verifycheck = IntVar()
-        self.verifycheck.set(0)
-        self.cb_verifycheck = Checkbutton(frame_bottombuttons, 
-            text="Verify Signature Archives", 
-            justify=LEFT, 
-            variable = self.verifycheck, 
-            onvalue=1, 
-            offvalue=0)
-        self.cb_verifycheck.grid(row=0, column=3, sticky='e',)
-
+        # Combo Box for Logging Details
+        self.cbLogging = StringVar()
+        self.combobox_cbLogging = ttk.Combobox(frame_bottombuttons, justify=LEFT, textvariable=self.cbLogging, width = 10, state='normal')
+        self.combobox_cbLogging.grid(row = 1, column=2, sticky = 'w', pady=3, padx=3)
+        self.combobox_cbLogging.set('DEBUG')
+        self.combobox_cbLogging['values'] = Logging_Levels # generate values based on Template List
+        self.combobox_cbLogging.bind('<<ComboboxSelected>>', self.handleComboBoxChanges_Logging)
 
         # Button to Start MD5 Hash
-        button_Selectfiles = ttk.Button(frame_bottombuttons, text = "3. Start",
-                                                      command = lambda: self.handleButtonPress('__start__'))                                             
-        button_Selectfiles.grid(row=1, columnspan=4, padx=3, pady=3, sticky='s')
+        button_Selectfiles = ttk.Button(frame_bottombuttons, text = "4. Start Processing",
+            command = lambda: self.handleButtonPress('__start__'))                                             
+        button_Selectfiles.grid(row=3, columnspan=4, padx=3, pady=3, sticky='w')
 
- 
         self.root.mainloop()
 
-    def handleButtonPress(self, myButtonPress):
+    def HandleRadioButton(self): 
+        if self.vars_rb_mode.get() == 1: #  Generate Signature File
+            self.signfile.set(1)
+            self.runverify.set(0)
+        elif self.vars_rb_mode.get() == 2: # Verify
+            self.runverify.set(1)
+            self.signfile.set(0)
+        else:
+            logging.error("We got here somehow")
 
+    def handleComboBoxChanges_Logging(self, event):
+    
+        logging_level_choice = self.combobox_cbLogging.get()
+        if logging_level_choice == "DEBUG":
+            self.logging_choice = logging.INFO
+        elif logging_level_choice == "INFO":
+            self.logging_choice = logging.WARNING
+        elif logging_level_choice == "WARNING":
+            self.logging_choice = logging.ERROR
+        elif logging_level_choice == "ERROR":
+            self.logging_choice = logging.CRITICAL            
+        else: 
+            self.logging_choice = logging.INFO
+            
+        logging.basicConfig(level=self.logging_choice, format=' %(asctime)s - %(levelname)s- %(message)s')
+
+    def handleButtonPress(self, myButtonPress):
         if myButtonPress == '__select_files__':
             if (os.name == 'nt'): # Windows OS
                 tmp = filedialog.askopenfilenames(initialdir='.')
@@ -362,6 +341,10 @@ class md5check:
                     self.archive_filelist_tf.insert(1.0, fname_basename + "; ")
 
         if myButtonPress == '__start__':
+            self.handleComboBoxChanges_Logging("this")
+            #logging.disable(self.logging_choice)
+
+            self.HandleRadioButton()
             self.handlearguments()
 
 def main():
