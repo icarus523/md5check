@@ -18,6 +18,32 @@ from tkinter import messagebox
 MAXIMUM_BLOCKSIZE_TO_READ = 65535
 p_reset = "\x08"*8
 VERSION="1.1 (GUI version)" # GUI version
+INITIAL_DIR = "."
+
+class ConfigFile:
+
+    def __init__(self):
+        self.configfilename = getpass.getuser() + ".config"
+
+        self.ConfigData = {
+            'USER': 'getpass.getuser()',
+            'INITIAL_DIR': '',
+            'MANUFACTURER': '',
+        }
+
+    def getConfigDetails(self):
+        return self.ConfigData
+    
+    def getConfigFilename(self):
+        return self.configfilename
+        
+    def setConfigDetails(self, Directory):
+        self.ConfigData['INITIAL_DIR'] = Directory
+        
+    def setConfigManufacturer(self, Manufacturer):
+        # Manufacturer is a list
+        self.ConfigData['MANUFACTURER'].append(Manufacturer)
+
 
 class md5check:
 
@@ -216,6 +242,7 @@ class md5check:
         self.filename_md5 = ''
         self.rungui = False
         self.Archive_Filename_List = list()
+        self.archive_filelist = list()
         self.logging_choice = logging.DEBUG
 
         logging.basicConfig(level= self.logging_choice, format=' %(asctime)s - %(levelname)s- %(message)s')
@@ -231,10 +258,12 @@ class md5check:
         ################ Top Frame ################
         frame_toparea = ttk.Frame(self.root)
         frame_toparea.pack(side = TOP, padx = 3, pady=3,  fill=X, expand=False)
-        frame_toparea.config(relief = FLAT, borderwidth = 3)
+        frame_toparea.config(relief = FLAT, borderwidth = 0)
         
-        ttk.Label(frame_toparea, justify=CENTER,
-                  text = 'This script verifies the MD5 Hashes of LTFO XML Submissions').pack(side=TOP, padx=3, pady=3, fill=X, expand=True, anchor='n')        
+        ttk.Label(frame_toparea, justify=LEFT,
+                  text = "This script verifies the MD5 Hashes of LTFO XML Submissions, " +
+                  "\nautomatically by generating/verifying signature files " +
+                  "and Unzipping Archives").pack(side=TOP, padx=3, pady=3, fill=X, expand=True, anchor='w')        
 
         # Radio Button modes
         MODES = [
@@ -250,8 +279,8 @@ class md5check:
 
 
         frame_mode = ttk.Frame(frame_toparea)
-        frame_mode.pack(side=TOP, fill=X, expand = True)
-        frame_mode.config(relief=FLAT, borderwidth=3)
+        frame_mode.pack(side=TOP, fill=X, padx = 3, pady = 3, expand = True)
+        frame_mode.config(relief=RIDGE, borderwidth=0)
         Label(frame_mode, text="1. Select Mode: ").pack(side = LEFT, anchor="w", padx=3, pady = 3, fill=X, expand=False) 
         for text, mode in MODES:
             b = ttk.Radiobutton(frame_mode, text=text, variable=self.vars_rb_mode, value=mode, command=self.HandleRadioButton)
@@ -259,31 +288,32 @@ class md5check:
 
         frame_Header = ttk.Frame(frame_toparea)
         frame_Header.pack(side = TOP, padx = 3, pady=3, fill=X, expand =True)
-        frame_Header.config(relief=RIDGE, borderwidth=3)
+        frame_Header.config(relief=RIDGE, borderwidth=0)
 
         ttk.Label(frame_Header, justify=CENTER,
-            text ='If Generating SIGS file: Select ZIP archive,\nIf Verifying SIGS file: select SIGS file,\nthen Press Start').pack(side = TOP, anchor='w', padx=3, pady = 3, fill=X, expand=True) 
+            text ='If Generating SIGS file: Select ZIP archive; If Verifying SIGS file: select SIGS file, then Press Start').pack(side = TOP, anchor='w', padx=3, pady = 3, fill=X, expand=True) 
 
         # Button to Select Archive Files
         button_Selectfiles = ttk.Button(frame_Header, text = "2. Select Files...",
                                                       command = lambda: self.handleButtonPress('__select_files__'))                                             
-        button_Selectfiles.pack(side = TOP, padx = 3, pady = 3, expand = True, anchor="w")
+        button_Selectfiles.pack(side = TOP, padx = 3, pady = 3, fill=X, expand = True, anchor="w")
 
         frame_Body = ttk.Labelframe(frame_Header, text ='Files Selected:')
         frame_Body.pack(side = LEFT, padx = 3, pady=3, fill=X, expand =True)
+        frame_Body.config(relief=RIDGE, borderwidth=0)
 
         # Text Area - Archive File List
         self.archive_filelist_tf = Text(frame_Body, width = 50, height=5)
         S = Scrollbar(frame_Body, command=self.archive_filelist_tf.yview)
         S.pack(side=RIGHT, fill=Y)
         self.archive_filelist_tf.configure(yscrollcommand=S.set)
-        self.archive_filelist_tf.pack(side=LEFT, fill=BOTH, expand=True)
+        self.archive_filelist_tf.pack(side=LEFT, padx = 3, pady = 3, fill=BOTH, expand=True)
 
 
         ################ Bottom FRAME ##############
         frame_bottombuttons = ttk.Frame(self.root)
         frame_bottombuttons.pack(side=BOTTOM, padx = 3, pady=3, fill=X, expand = True)
-        frame_bottombuttons.config(relief = RIDGE, borderwidth = 0)
+        frame_bottombuttons.config(relief = FLAT, borderwidth = 0)
 
         frame_Options = ttk.Frame(frame_bottombuttons)
         frame_Options.pack(side=TOP, padx = 3, pady=3, fill=X, expand = True)
@@ -292,7 +322,7 @@ class md5check:
         frame_Options.config(relief = RIDGE, borderwidth = 0)
 
         ttk.Label(frame_Options, justify=LEFT,
-                  text = '3. Select Options:').pack(side = LEFT, padx = 3, pady = 3, fill=X, expand = True, anchor='w')
+                  text = '3. Select Options:').pack(side = LEFT, padx = 3, pady = 3, fill=X, expand = False, anchor='w')
      
         # Check Button - Unzip Archive
         self.unzipflag = IntVar()
@@ -312,7 +342,7 @@ class md5check:
 
         # Combo Box for Logging Details
         self.cbLogging = StringVar()
-        self.combobox_cbLogging = ttk.Combobox(frame_Options, justify=LEFT, textvariable=self.cbLogging, width = 10, state='normal')
+        self.combobox_cbLogging = ttk.Combobox(frame_Options, justify=LEFT, textvariable=self.cbLogging, width = 7, state='normal')
         self.combobox_cbLogging.pack(side=LEFT, padx=3, pady=3, fill=X, expand = True, anchor='s')
         #grid(row = 1, column=2, sticky = 'w', pady=3, padx=3)
         self.combobox_cbLogging.set('DEBUG')
@@ -322,7 +352,7 @@ class md5check:
         # Button to Start MD5 Hash
         frame_bottomelements = ttk.Frame(frame_bottombuttons)
         frame_bottomelements.pack(side=BOTTOM, padx = 3, pady=3, fill=X, expand = True)
-        frame_bottomelements.config(relief = FLAT, borderwidth = 0)
+        frame_bottomelements.config(relief = RIDGE, borderwidth = 0)
 
         button_Selectfiles = ttk.Button(frame_bottomelements, text = "4. Start Processing",
             command = lambda: self.handleButtonPress('__start__'))                                             
@@ -331,14 +361,22 @@ class md5check:
         self.root.mainloop()
 
     def HandleRadioButton(self): 
+        self.archive_filelist_tf.delete(1.0, END)
+
         if self.vars_rb_mode.get() == 1: #  Generate Signature File
             self.signfile.set(1)
             self.runverify.set(0)
+             
         elif self.vars_rb_mode.get() == 2: # Verify
             self.runverify.set(1)
             self.signfile.set(0)
+            self.unzipflag.set(0) # can't unzip option when verifying
         else:
             logging.error("We got here somehow")
+
+        for fname in self.archive_filelist:
+            fname_basename = os.path.basename(fname)
+            self.archive_filelist_tf.insert(1.0, fname_basename + "; ")
 
     def handleComboBoxChanges_Logging(self, event):
     
@@ -359,9 +397,9 @@ class md5check:
     def handleButtonPress(self, myButtonPress):
         if myButtonPress == '__select_files__':
             if (os.name == 'nt'): # Windows OS
-                tmp = filedialog.askopenfilenames(initialdir='.')
+                tmp = filedialog.askopenfilenames(initialdir=INITIAL_DIR)
             elif (os.name == 'posix'): # Linux OS
-                tmp = filedialog.askopenfilenames(initialdir='.')
+                tmp = filedialog.askopenfilenames(initialdir='.') # Debugging
             else: 
                 tmp = filedialog.askopenfilenames(initialdir='.')
 
