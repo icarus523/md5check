@@ -222,10 +222,10 @@ class md5check:
     def verifyfile(self, fname):
         if (fname.upper().endswith('.SIGS')):
             h = self.dohash_sha1(self.stripfile(fname))
-            logging.info("Filename: " + os.path.basename(fname))
+            logging.info("Filename: " + fname)
             logging.info("SHA1 Hash Recalculated: " + str(h).upper())
             # We uppercase in Written SIGS file, make sure you uppercase before comparing
-            if h.upper() in open(os.path.basename(fname)).read(): # HAX0Rs
+            if h.upper() in open(fname).read(): # HAX0Rs
                 messagebox.showinfo("SIGS File Verified!", "Calculated SHA1 Hash:" + h.upper() 
                     + ",\nMatches with expected Hash in SIGS file")
                 logging.info("SIGS file: Verified")
