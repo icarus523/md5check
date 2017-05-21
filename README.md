@@ -9,8 +9,7 @@ This version has a GUI, updated because to some people the CLI version was too c
 * Validate signature file to ensure that the signature file hasn't been tampered. 
 
 ## v1.1 GUI Version enhancements
-* Process multiple Archive submissions
+* Process multiple Archive or SIGS files
 * When verifying, automatically tells the user if Verification with SIGS file is a success (previously I left it for the user to verify).
-* Logging Filter Control (doesn't work!)
+* Logging Filter Control
 * Will not try to Unzip file unless MD5 check passes
-* Initial Directory will now be based on a config file
