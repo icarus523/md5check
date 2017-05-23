@@ -1,6 +1,6 @@
-# md5check_gui
-Script to verify MD5 signature hash that is included with LTFO submissions  
-This version has a GUI, updated because to some people the CLI version was too complicated. 
+# md5check_ltfoprocess
+Script to automate all Manual LTFO submission processes  
+E.g. Copy Files, Rename Files, Unzip Files, Verify Files, etc. 
 
 ## Features:  
 * Performs md5 hash calculation on a submitted archived and compare it to the provided signature file for comparison. 
@@ -8,8 +8,7 @@ This version has a GUI, updated because to some people the CLI version was too c
 * Generate a signature file with user and timestamp info
 * Validate signature file to ensure that the signature file hasn't been tampered. 
 
-## v1.1 GUI Version enhancements
-* Process multiple Archive or SIGS files
-* When verifying, automatically tells the user if Verification with SIGS file is a success (previously I left it for the user to verify).
-* Logging Filter Control
-* Will not try to Unzip file unless MD5 check passes
+## v1.2 LTFO Process
+* Includes ConfigFile Class to save user preferences
+* Includes LTFO XML File Reader Class to review XML submissions
+* Has the capability to Move Game Artwork to Network Drive based on user preferences and XML Details (Gamename and GameID)
