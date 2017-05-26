@@ -5,6 +5,8 @@ import zipfile
 import getopt
 import getpass
 import logging
+import json
+import tkinter as tk
 
 from collections import namedtuple
 from datetime import datetime
@@ -17,32 +19,149 @@ from tkinter import messagebox
 
 MAXIMUM_BLOCKSIZE_TO_READ = 65535
 p_reset = "\x08"*8
-VERSION="1.1 (GUI version)" # GUI version
-INITIAL_DIR = "."
+VERSION="1.2 (GUI + CONFIG version)" # GUI version
+LAST_WORKING_DIR = "."
 
 class ConfigFile:
 
+    def handleButtonPress(self, ButtonChoice):
+        if ButtonChoice == '__select_Artwork__': 
+            self.ConfigData['ARTWORK_DIR'] = filedialog.askdirectory(initialdir='.', title='Please select a ARTWORK Directory')
+            
+            self.text_ArtworkDirectory.delete(1.0, END)
+            self.text_ArtworkDirectory.insert(1.0, str(self.ConfigData['ARTWORK_DIR']))
+            self.writeConfigtoDisk() # Update ConfigFile
+
+        elif ButtonChoice == '__select_Working_Dir__':
+            self.ConfigData['INITIAL_DIR'] = filedialog.askdirectory(initialdir='.', title='Please select a WORKING Directory')
+            self.text_WorkingDirectory.delete(1.0, END)    
+            self.text_WorkingDirectory.insert(1.0, self.ConfigData['INITIAL_DIR'])
+            self.writeConfigtoDisk() # Update ConfigFile
+
+        elif ButtonChoice == '__select_BINIMAGE_Dir__':
+            self.ConfigData['BINIMAGE_DIR'] = filedialog.askdirectory(initialdir='.', title='Please select a BINIMAGE Directory')
+            self.text_BINIMAGEDirectory.delete(1.0, END)    
+            self.text_BINIMAGEDirectory.insert(1.0, self.ConfigData['BINIMAGE_DIR'])
+            self.writeConfigtoDisk() # Update ConfigFile
+
+    def setupGUI(self):
+        self.root = Tk()
+        self.root.wm_title("Preferences")
+        self.root.resizable(0,0)
+        
+        ################ Top Frame ################
+        frame_mainframe = ttk.Frame(self.root)
+        frame_mainframe.pack(side = TOP, padx = 3, pady=3,  fill=X, expand=False)
+        frame_mainframe.config(relief = FLAT, borderwidth = 0)
+        
+        ttk.Label(frame_mainframe, justify=LEFT,
+                  text = "User settings for LTFO Process Script").pack(side=TOP, padx=3, pady=3, fill=X, expand=True, anchor='w')
+
+        ####### Artwork Directory
+        frame_ArtworkDirectory = ttk.Frame(self.root)
+        frame_ArtworkDirectory.pack(side=TOP, fill=X, padx = 3, pady = 3, expand = True)
+        frame_ArtworkDirectory.config(relief=RIDGE, borderwidth=0)
+        button_SelectArtworkDirectory = ttk.Button(frame_ArtworkDirectory, text="Artwork Directory: ",
+                                                    command = lambda: self.handleButtonPress('__select_Artwork__'))
+        button_SelectArtworkDirectory.pack(side = LEFT, padx  = 3, pady = 3, expand = False, anchor = 'w')             
+        
+        self.text_ArtworkDirectory = Text(frame_ArtworkDirectory, height=1, width=50)
+        self.text_ArtworkDirectory.pack(side=LEFT, padx = 3, pady = 3, fill=X, expand=True)
+        
+        self.text_ArtworkDirectory.insert("1.0", self.ConfigData['ARTWORK_DIR'])
+        
+        ####### Working Directory
+        frame_WorkingDirectory = ttk.Frame(self.root)
+        frame_WorkingDirectory.pack(side=TOP, fill=X, padx = 3, pady = 3, expand = True)
+        frame_WorkingDirectory.config(relief=RIDGE, borderwidth=0)
+        
+        button_SelectWorkingDirectory = ttk.Button(frame_WorkingDirectory, text="Working Directory: ",
+                                                    command = lambda: self.handleButtonPress('__select_Working_Dir__'))
+        button_SelectWorkingDirectory.pack(side = LEFT, padx = 3, pady = 3, expand = False, anchor = 'w')   
+        self.text_WorkingDirectory = Text(frame_WorkingDirectory, height=1, width=50)
+        self.text_WorkingDirectory.pack(side=LEFT, fill=X, padx = 3, pady = 3, expand=True)
+        self.text_WorkingDirectory.insert("1.0", self.ConfigData['INITIAL_DIR'])
+
+        ###### BINIMAGE Directory
+        frame_BINIMAGEDirectory = ttk.Frame(self.root)
+        frame_BINIMAGEDirectory.pack(side=TOP, fill=X, padx = 3, pady = 3, expand = True)
+        frame_BINIMAGEDirectory.config(relief=RIDGE, borderwidth=0)
+        button_SelectBINIMAGEDirectory = ttk.Button(frame_BINIMAGEDirectory, text="BINIMAGE Directory: ",
+                                                    command = lambda: self.handleButtonPress('__select_BINIMAGE_Dir__'))
+        button_SelectBINIMAGEDirectory.pack(side = LEFT, padx = 3, pady = 3, expand = False, anchor = 'w')   
+        self.text_BINIMAGEDirectory = Text(frame_BINIMAGEDirectory, height=1, width=50)
+        self.text_BINIMAGEDirectory.pack(side=LEFT, fill=X, padx = 3, pady = 3, expand=True)
+        self.text_BINIMAGEDirectory.insert("1.0", self.ConfigData['BINIMAGE_DIR'])
+        
+        frame_ManufacturerSelection = ttk.Frame(self.root)
+        frame_ManufacturerSelection.pack(side=TOP, fill=X, padx = 3, pady = 3, expand = True)
+        frame_ManufacturerSelection.config(relief=RIDGE, borderwidth=0)
+        
+        # Combo Box for Manufacturer
+        manufacturer_list = [ 'AGT', 'Aruze', 'Aristocrat', 'Konami', 'IGT', 'SG Gaming']
+        manufacturer_list.sort()
+        ttk.Label(frame_ManufacturerSelection, justify=LEFT,
+                  text = "Manufacturer: ").pack(side=LEFT, padx=3, pady=3, fill=Y, expand = False, anchor='w')
+        self.cbManufacturer = StringVar()
+        self.combobox_cbManufacturer = ttk.Combobox(frame_ManufacturerSelection, 
+            justify=LEFT, textvariable=self.cbManufacturer, width = 10, state='normal')
+        self.combobox_cbManufacturer.pack(side=LEFT, padx=3, pady=3, fill=X, expand = True, anchor='w')
+        self.combobox_cbManufacturer['values'] = manufacturer_list # sort the list first. 
+        self.combobox_cbManufacturer.bind('<<ComboboxSelected>>', self.handleComboBoxChanges_Manufacturer)
+        
+        if self.ConfigData['MANUFACTURER'] in manufacturer_list:
+            self.combobox_cbManufacturer.set(self.ConfigData['MANUFACTURER'])
+        else:
+            logging.debug("Invalid Manufacturer in Config File") 
+
+    def handleComboBoxChanges_Manufacturer(self, event):
+        self.ConfigData['MANUFACTURER'] = self.combobox_cbManufacturer.get()
+        logging.debug("Manufacturer Selected: " + self.combobox_cbManufacturer.get())
+        self.writeConfigtoDisk() # Update ConfigFile
+
     def __init__(self):
         self.configfilename = getpass.getuser() + ".config"
+        if (os.path.isfile(self.configfilename)):         # Try to read current configfile.
+            self.ConfigData = self.readConfigFile(self.configfilename)
+        else:   # Default Config Settings.
+            self.ConfigData = {
+                'USER': getpass.getuser(),
+                'INITIAL_DIR': 'Please Update',
+                'MANUFACTURER': 'Please Update',
+                'ARTWORK_DIR': 'Please Update',
+                'BINIMAGE_DIR': 'Please Update'
+            }
 
-        self.ConfigData = {
-            'USER': 'getpass.getuser()',
-            'INITIAL_DIR': '',
-            'MANUFACTURER': '',
-        }
+            self.writeConfigtoDisk() # Write to Disk.
+            self.setupGUI() # show GUI only if default config 
 
-    def getConfigDetails(self):
-        return self.ConfigData
+        # logging.debug("Config Data: " + str(json.dumps(self.ConfigData, sort_keys=True, indent=4, separators=(',',':'))))        
+    
+    def getWorkingDirectory(self):
+        return self.ConfigData['INITIAL_DIR']
+ 
+    def getArtworkDirectory(self, manufacturer):
+        # Assumptions: manufacturer matches what is used in G:\
+        # i.e. AGT, ARI, PAC, as this is used for the file path join. 
+        
+        return os.path.join(self.ConfigData['ARTWORK_DIR'], manufacturer)
+
+    def getManufacturer(self):
+        return self.ConfigData['MANUFACTURER']
     
     def getConfigFilename(self):
         return self.configfilename
-        
-    def setConfigDetails(self, Directory):
-        self.ConfigData['INITIAL_DIR'] = Directory
-        
-    def setConfigManufacturer(self, Manufacturer):
-        # Manufacturer is a list
-        self.ConfigData['MANUFACTURER'].append(Manufacturer)
+
+    def writeConfigtoDisk(self):
+        with open(self.configfilename, 'w') as json_file:
+            json.dump(self.ConfigData, json_file, sort_keys=True, indent=4, separators=(',',':')) # write to disk. 
+
+    def readConfigFile(self, fname):
+        Data = {}
+        with open(fname, 'r') as json_file:
+            Data = json.load(json_file)
+
+        return Data
 
 
 class md5check:
@@ -147,6 +266,8 @@ class md5check:
                 logging.info("Unzipping file..." + filepath_zip)
                 Thread(target=self.unzip(filepath_zip, currentdir)).start()
                 #self.unzip(filepath_zip, currentdir) # Too slow remove threading
+
+                # Move Artwork to Artwork Directory
         
             # Add SHA1 hash calc over the generated file     
             if (self.signfile.get() == 1):
@@ -182,7 +303,10 @@ class md5check:
                 extracted_size += file.file_size
                 percentage = extracted_size * 100/uncompress_size #file.filename + 
                 logging.info("%-30s %6.2f %%\r" % ( file.filename, float(percentage)))
-                zf.extract(file, dest_dir)
+                # Fix to output to Archive Filename Subdirectory. 
+                fileoutput = os.path.join(dest_dir, os.path.basename(source_filename)[:-4])
+                logging.debug("Unzipping to: " + fileoutput)
+                zf.extract(file, os.path.join(dest_dir, fileoutput))
     
     def handlearguments(self):
         for item in self.archive_filelist:
@@ -191,7 +315,7 @@ class md5check:
                 if (self.signfile.get() == 1):
                     filename_zip =  os.path.basename(item)
                     filename_md5 = filename_zip.rstrip("zip") + "md5"
-                    currentdir = os.path.dirname(item)
+                    self.currentdir = os.path.dirname(item)
 
                     logging.info("Processing: " + filename_zip +
                            " and " + filename_md5)
@@ -199,7 +323,7 @@ class md5check:
                     signfilename = filename_zip[:-4] + '_signed_output.sigs'
 
                     # Start Thread for ProcessFile()
-                    Thread(target=self.processfile(item, currentdir, signfilename, filename_md5)).start()
+                    Thread(target=self.processfile(item, self.currentdir, signfilename, filename_md5)).start()
                 
                 if self.runverify.get() == 1:
                     logging.info("Verifying SIGS file Mode")
@@ -244,16 +368,35 @@ class md5check:
         self.Archive_Filename_List = list()
         self.archive_filelist = list()
         self.logging_choice = logging.DEBUG
+        self.currentdir = "."
 
         logging.basicConfig(level= self.logging_choice, format=' %(asctime)s - %(levelname)s- %(message)s')
         logging.debug('Start of md5check.py')
 
         self.root = Tk()
+        # New config class
+        # self.myconfig = ConfigFile()
         self.setupGUI()
+
+    def MenuBar_Config(self):
+        self.myconfig = ConfigFile()
+        self.myconfig.setupGUI()
 
     def setupGUI(self):
         self.root.wm_title("md5check v" + VERSION)
         self.root.resizable(0,0)
+
+        menubar = tk.Menu(self.root)
+        filemenu = tk.Menu(menubar, tearoff=0)
+        optionmenu = tk.Menu(menubar, tearoff=0)
+
+        menubar.add_cascade(label="File", menu=filemenu)
+        menubar.add_cascade(label="Option", menu=optionmenu)
+        optionmenu.add_command(label="Preferences...", command=self.MenuBar_Config) # start this script now. 
+        #optionmenu.add_command(label="Template Editor...", command=self.Launch_TemplateEditor) # start this script now. 
+        filemenu.add_command(label="Exit", command=self.root.destroy)
+        
+        self.root.config(menu=menubar)
 
         ################ Top Frame ################
         frame_toparea = ttk.Frame(self.root)
@@ -397,9 +540,9 @@ class md5check:
     def handleButtonPress(self, myButtonPress):
         if myButtonPress == '__select_files__':
             if (os.name == 'nt'): # Windows OS
-                tmp = filedialog.askopenfilenames(initialdir=INITIAL_DIR)
+                tmp = filedialog.askopenfilenames(initialdir=self.currentdir)
             elif (os.name == 'posix'): # Linux OS
-                tmp = filedialog.askopenfilenames(initialdir='.') # Debugging
+                tmp = filedialog.askopenfilenames(initialdir=self.currentdir) # Debugging
             else: 
                 tmp = filedialog.askopenfilenames(initialdir='.')
 
