@@ -133,7 +133,7 @@ class ConfigFile:
             }
 
             self.writeConfigtoDisk() # Write to Disk.
-            self.setupGUI() # show GUI only if default config 
+            # self.setupGUI() # show GUI only if default config 
 
         # logging.debug("Config Data: " + str(json.dumps(self.ConfigData, sort_keys=True, indent=4, separators=(',',':'))))        
     
