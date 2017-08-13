@@ -19,7 +19,7 @@ from tkinter import messagebox
 
 MAXIMUM_BLOCKSIZE_TO_READ = 65535
 p_reset = "\x08"*8
-VERSION="1.2 (GUI + CONFIG version)" # GUI version
+VERSION="1.2.1 (GUI + CONFIG version)" # GUI version
 LAST_WORKING_DIR = "."
 
 class ConfigFile:
@@ -133,7 +133,6 @@ class ConfigFile:
             }
 
             self.writeConfigtoDisk() # Write to Disk.
-            # self.setupGUI() # show GUI only if default config 
 
         # logging.debug("Config Data: " + str(json.dumps(self.ConfigData, sort_keys=True, indent=4, separators=(',',':'))))        
     
@@ -368,7 +367,7 @@ class md5check:
         self.Archive_Filename_List = list()
         self.archive_filelist = list()
         self.logging_choice = logging.DEBUG
-        self.currentdir = "."
+        self.currentdir = '.'
 
         logging.basicConfig(level= self.logging_choice, format=' %(asctime)s - %(levelname)s- %(message)s')
         logging.debug('Start of md5check.py')
@@ -376,6 +375,7 @@ class md5check:
         self.root = Tk()
         # New config class
         # self.myconfig = ConfigFile()
+
         self.setupGUI()
 
     def MenuBar_Config(self):
@@ -538,6 +538,10 @@ class md5check:
         logging.basicConfig(level=self.logging_choice, format=' %(asctime)s - %(levelname)s- %(message)s')
 
     def handleButtonPress(self, myButtonPress):
+        # Read config file
+        myconfig = ConfigFile()
+        self.currentdir = myconfig.getWorkingDirectory()
+        
         if myButtonPress == '__select_files__':
             if (os.name == 'nt'): # Windows OS
                 tmp = filedialog.askopenfilenames(initialdir=self.currentdir)
