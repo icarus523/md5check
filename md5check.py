@@ -193,6 +193,20 @@ class md5check:
 
         return m.hexdigest()
 
+    # input: file to be hashed using sha256()
+    # output: hexdigest of input file    
+    def dohash_sha256(self, fname, chunksize=8192): 
+        m = hashlib.sha256()         
+
+        # Read in chunksize blocks at a time
+        with open(fname, 'rb') as f:
+            while True:
+                block = f.read(chunksize)
+                if not block: break
+                m.update(block)    
+
+        return m.hexdigest()
+
     def pprinttable(self, rows, outfile="default_signed_output.txt"):
         if len(rows) > 1:
             headers = rows[0]._fields
@@ -280,7 +294,7 @@ class md5check:
        
 
     def signfileoutput(self, infile, outfile):
-        h = self.dohash_sha1(infile)
+        h = self.dohash_sha256(infile)
         if h:
             self.appendfileoutput(h, outfile)
 
@@ -288,7 +302,7 @@ class md5check:
         with open (outfile, 'a') as f:
             f.write("#---8<---------------------------------START--------------------------------------------\n")
             f.write("# Remove this section to verify hash for: " + os.path.basename(outfile) + "\n")
-            f.write("# SHA1 hash: " + signature.upper() + "\n")
+            f.write("# SHA256 hash: " + signature.upper() + "\n")
             f.write("# IMPORTANT! To reconcile make sure there's an empty line at the bottom of this text file\n")
             f.write("# ---------------------------------------END------------------------------------->8------")
 
@@ -344,7 +358,7 @@ class md5check:
 
     def verifyfile(self, fname):
         if (fname.upper().endswith('.SIGS')):
-            h = self.dohash_sha1(self.stripfile(fname))
+            h = self.dohash_sha256(self.stripfile(fname))
             logging.info("Filename: " + fname)
             logging.info("SHA1 Hash Recalculated: " + str(h).upper())
             # We uppercase in Written SIGS file, make sure you uppercase before comparing
